@@ -11,7 +11,9 @@ from pathlib import Path
 from AppKit import (
     NSApplication, NSStatusBar, NSStatusItem, NSVariableStatusItemLength,
     NSMenu, NSMenuItem, NSApplicationActivationPolicyAccessory, NSApp,
-    NSEvent, NSKeyDownMask, NSKeyUpMask, NSFlagsChangedMask, NSAlert, NSInformationalAlertStyle
+    NSEvent, NSKeyDownMask, NSKeyUpMask, NSFlagsChangedMask, NSAlert, NSInformationalAlertStyle,
+    NSWindow, NSTextField, NSButton, NSPopUpButton, NSStackView, NSScreen, NSMakeRect, NSMakeSize,
+    NSEdgeInsetsMake
 )
 from Foundation import NSObject
 from PyObjCTools import AppHelper
@@ -23,6 +25,41 @@ from voicetype import VoiceType
 # Lock file for single-instance enforcement
 APP_LOCK_FILE = Path.home() / ".voicetype_app.lock"
 _app_lock_file_handle = None
+
+# Configuration file path
+APP_CONFIG_FILE = Path.home() / ".voicetype_app_config.json"
+
+# Default configuration
+DEFAULT_APP_CONFIG = {
+    "press_to_talk_key": "ctrl"
+}
+
+
+def load_app_config():
+    """Load app configuration from file."""
+    if APP_CONFIG_FILE.exists():
+        try:
+            import json
+            with open(APP_CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                result = DEFAULT_APP_CONFIG.copy()
+                result.update(config)
+                return result
+        except Exception as e:
+            print(f"Error loading config: {e}")
+    return DEFAULT_APP_CONFIG.copy()
+
+
+def save_app_config(config):
+    """Save app configuration to file."""
+    try:
+        import json
+        with open(APP_CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving config: {e}")
+        return False
 
 
 def _acquire_app_lock():
@@ -91,6 +128,13 @@ class VoiceTypeApp(NSObject):
         self.is_running = False
         self.keyboard_thread = None
         
+        # Settings window reference
+        self.settings_window = None
+        
+        # Load configuration
+        self.config = load_app_config()
+        self.press_to_talk_key = self.config.get("press_to_talk_key", "ctrl")
+        
         # Create status bar item
         try:
             self.status_bar = NSStatusBar.systemStatusBar()
@@ -131,6 +175,14 @@ class VoiceTypeApp(NSObject):
                 "Start", "startVoicetype:", ""
             )
             self.menu.addItem_(start_item)
+        
+        self.menu.addItem_(NSMenuItem.separatorItem())
+        
+        # Settings
+        settings_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Settings...", "showSettings:", ""
+        )
+        self.menu.addItem_(settings_item)
         
         self.menu.addItem_(NSMenuItem.separatorItem())
         
@@ -230,49 +282,57 @@ class VoiceTypeApp(NSObject):
         # Track previous state to detect changes
         self.previous_control_state = False
         
-        # Monitor for control key changes
+        # Monitor for modifier key changes (works for ctrl, cmd, alt, shift)
         self.event_monitor = NSEvent.addGlobalMonitorForEventsMatchingMask_handler_(
             NSFlagsChangedMask,
             self._handle_flags_changed
         )
         if self.event_monitor:
-            print("NSEvent monitor created successfully")
+            print(f"NSEvent monitor created successfully (monitoring: {self.press_to_talk_key})")
         else:
             print("Warning: NSEvent monitor is None - may need Input Monitoring permission")
     
     def _handle_flags_changed(self, event):
-        """Handle modifier key changes (Control key)."""
+        """Handle modifier key changes."""
         try:
             if not self.is_running or not self.voicetype:
                 return event
             
-            # Get modifier flags - Control key is bit 18 (0x40000)
+            # Get modifier flags
             flags = event.modifierFlags()
-            control_pressed = (flags & 0x40000) != 0
+            
+            # Check which key is being monitored
+            key_pressed = False
+            if self.press_to_talk_key.lower() in ["ctrl", "control"]:
+                key_pressed = (flags & 0x40000) != 0  # Control key
+            elif self.press_to_talk_key.lower() in ["cmd", "command"]:
+                key_pressed = (flags & 0x80000) != 0  # Command key
+            elif self.press_to_talk_key.lower() in ["alt", "option"]:
+                key_pressed = (flags & 0x200000) != 0  # Option/Alt key
+            elif self.press_to_talk_key.lower() == "shift":
+                key_pressed = (flags & 0x20000) != 0  # Shift key
             
             # Only act on state changes
-            if control_pressed != self.previous_control_state:
-                self.previous_control_state = control_pressed
+            if key_pressed != self.previous_control_state:
+                self.previous_control_state = key_pressed
                 
-                if control_pressed:
-                    # Control key just pressed
-                    print("Control key pressed")
+                if key_pressed:
+                    # Key just pressed
                     if not self.voicetype.is_recording and not self.voicetype.press_to_talk_key_pressed:
                         now = time.time()
                         time_since_last = now - self.voicetype.last_toggle_time
                         if time_since_last >= self.voicetype.toggle_cooldown:
                             self.voicetype.press_to_talk_key_pressed = True
                             self.voicetype.start_recording()
-                            print("Recording started")
+                            print(f"{self.press_to_talk_key} key pressed - Recording started")
                 else:
-                    # Control key just released
-                    print("Control key released")
+                    # Key just released
                     if self.voicetype.press_to_talk_key_pressed:
                         self.voicetype.press_to_talk_key_pressed = False
                         if self.voicetype.is_recording:
                             self.voicetype.stop_requested = True
                             self.voicetype.last_toggle_time = time.time()
-                            print("Stop requested")
+                            print(f"{self.press_to_talk_key} key released - Stop requested")
         except Exception as e:
             print(f"Error in _handle_flags_changed: {e}")
             import traceback
@@ -304,12 +364,208 @@ class VoiceTypeApp(NSObject):
         self.voicetype = None
         self.build_menu()
     
+    def showSettings_(self, sender):
+        """Show settings window."""
+        try:
+            # Close existing settings window if open
+            if self.settings_window:
+                try:
+                    self.settings_window.close()
+                    self.settings_window = None
+                except:
+                    pass
+            
+            # Create and show new settings window
+            print("Creating settings window...")
+            self.settings_window = SettingsWindow(self)
+            if self.settings_window:
+                print("Settings window created, showing...")
+                self.settings_window.retain()  # Retain to prevent garbage collection
+                # Center the window
+                self.settings_window.center()
+                # Make it visible and bring to front
+                self.settings_window.orderFront_(None)
+                self.settings_window.makeKeyAndOrderFront_(None)
+                # Activate the app
+                NSApp.activateIgnoringOtherApps_(True)
+                print("Settings window should be visible now")
+            else:
+                print("ERROR: Settings window is None")
+        except Exception as e:
+            print(f"Error showing settings: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def terminate_(self, sender):
         """Quit the app."""
         if self.is_running:
             self.stopVoicetype_(None)
         _release_app_lock()
         NSApp.terminate_(None)
+
+
+class SettingsWindow(NSWindow):
+    """Settings window for VoiceType configuration."""
+    
+    def __init__(self, app):
+        # Window setup
+        width, height = 400, 200
+        screen_frame = NSScreen.mainScreen().frame()
+        x = (screen_frame.size.width - width) / 2
+        y = (screen_frame.size.height - height) / 2
+        
+        # Window style masks: 1=Titled, 2=Closable, 4=Miniaturizable
+        style_mask = 1 | 2 | 4
+        # Backing store: 2=Buffered
+        backing = 2
+        self = objc.super(SettingsWindow, self).initWithContentRect_styleMask_backing_defer_(
+            NSMakeRect(x, y, width, height),
+            style_mask,
+            backing,
+            False
+        )
+        if self is None:
+            return None
+        
+        self.app = app
+        self.setTitle_("VoiceType Settings")
+        self.setReleasedWhenClosed_(False)
+        # Make sure window can become key and main
+        self.setCanBecomeKeyWindow_(True)
+        self.setCanBecomeMainWindow_(True)
+        # Set collection behavior to show on all spaces
+        self.setCollectionBehavior_(1)  # NSWindowCollectionBehaviorDefault
+        
+        # Create UI
+        try:
+            self.create_ui()
+            print("Settings UI created")
+        except Exception as e:
+            print(f"Error creating UI: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return self
+    
+    def create_ui(self):
+        """Create the settings UI."""
+        content_view = self.contentView()
+        content_view.setWantsLayer_(True)
+        
+        # Main stack view
+        stack = NSStackView.alloc().initWithFrame_(content_view.bounds())
+        stack.setOrientation_(1)  # Vertical
+        stack.setSpacing_(15)
+        # Set edge insets (top, left, bottom, right)
+        stack.setEdgeInsets_(NSEdgeInsetsMake(20, 20, 20, 20))
+        stack.setDistribution_(2)  # Fill
+        content_view.addSubview_(stack)
+        
+        # Press-to-talk key label
+        key_label = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 200, 20))
+        key_label.setStringValue_("Press-to-Talk Key:")
+        key_label.setBordered_(False)
+        key_label.setDrawsBackground_(False)
+        key_label.setEditable_(False)
+        stack.addView_(key_label)
+        
+        # Key selection popup
+        self.key_popup = NSPopUpButton.alloc().initWithFrame_(NSMakeRect(0, 0, 200, 25))
+        self.key_popup.addItemsWithTitles_(["ctrl", "cmd", "alt", "shift"])
+        current_key = self.app.press_to_talk_key.lower()
+        if current_key in ["ctrl", "control", "cmd", "command", "alt", "option", "shift"]:
+            # Normalize key name
+            if current_key in ["control"]:
+                current_key = "ctrl"
+            elif current_key in ["command"]:
+                current_key = "cmd"
+            elif current_key in ["option"]:
+                current_key = "alt"
+            self.key_popup.selectItemWithTitle_(current_key)
+        stack.addView_(self.key_popup)
+        
+        # Buttons
+        button_stack = NSStackView.alloc().initWithFrame_(NSMakeRect(0, 0, 200, 30))
+        button_stack.setOrientation_(0)  # Horizontal
+        button_stack.setSpacing_(10)
+        
+        save_button = NSButton.alloc().initWithFrame_(NSMakeRect(0, 0, 100, 30))
+        save_button.setTitle_("Save")
+        save_button.setButtonType_(0)
+        save_button.setBezelStyle_(1)
+        save_button.setTarget_(self)
+        save_button.setAction_("saveSettings:")
+        button_stack.addView_(save_button)
+        
+        cancel_button = NSButton.alloc().initWithFrame_(NSMakeRect(0, 0, 100, 30))
+        cancel_button.setTitle_("Cancel")
+        cancel_button.setButtonType_(0)
+        cancel_button.setBezelStyle_(1)
+        cancel_button.setTarget_(self)
+        cancel_button.setAction_("cancel:")
+        button_stack.addView_(cancel_button)
+        
+        stack.addView_(button_stack)
+    
+    def saveSettings_(self, sender):
+        """Save settings."""
+        try:
+            new_key = self.key_popup.selectedItem().title()
+            
+            # Update app config
+            self.app.config["press_to_talk_key"] = new_key
+            self.app.press_to_talk_key = new_key
+            
+            # Save to file
+            if save_app_config(self.app.config):
+                # If running, need to restart monitoring with new key
+                if self.app.is_running:
+                    # Stop current monitoring
+                    if hasattr(self.app, 'event_monitor') and self.app.event_monitor:
+                        try:
+                            NSEvent.removeMonitor_(self.app.event_monitor)
+                        except:
+                            pass
+                    # Restart with new key
+                    self.app.previous_control_state = False
+                    self.app._start_nsevent_monitoring()
+                
+                self.close()
+                # Release reference in app
+                if self.app.settings_window == self:
+                    self.app.settings_window = None
+                
+                # Show confirmation
+                alert = NSAlert.alloc().init()
+                alert.setMessageText_("Settings Saved")
+                if self.app.is_running:
+                    alert.setInformativeText_(f"Press-to-talk key changed to: {new_key}\n\nChanges applied immediately.")
+                else:
+                    alert.setInformativeText_(f"Press-to-talk key changed to: {new_key}\n\nStart VoiceType to use the new key.")
+                alert.setAlertStyle_(NSInformationalAlertStyle)
+                alert.addButtonWithTitle_("OK")
+                alert.runModal()
+            else:
+                alert = NSAlert.alloc().init()
+                alert.setMessageText_("Error Saving Settings")
+                alert.setInformativeText_("Could not save settings.")
+                alert.setAlertStyle_(NSInformationalAlertStyle)
+                alert.addButtonWithTitle_("OK")
+                alert.runModal()
+        except Exception as e:
+            alert = NSAlert.alloc().init()
+            alert.setMessageText_("Error")
+            alert.setInformativeText_(str(e))
+            alert.setAlertStyle_(NSInformationalAlertStyle)
+            alert.addButtonWithTitle_("OK")
+            alert.runModal()
+    
+    def cancel_(self, sender):
+        """Cancel and close window."""
+        self.close()
+        # Release reference in app
+        if self.app.settings_window == self:
+            self.app.settings_window = None
 
 
 def main():
