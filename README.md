@@ -14,12 +14,35 @@
 
 ### Installation
 
-1. Install dependencies:
+1. Create a virtual environment (recommended):
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On macOS/Linux
+```
+
+2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Run VoiceType:
+### Running the Menu Bar App (Recommended)
+
+The easiest way to use VoiceType is through the macOS menu bar app:
+
+```bash
+python run_app.py
+```
+
+This will:
+- Show a 🎤 icon in your menu bar
+- Auto-start VoiceType on launch
+- Provide a menu with Start/Stop, Settings, and Quit options
+- Allow you to customize the press-to-talk key through Settings
+
+### Running the Command Line Version
+
+For command-line usage:
+
 ```bash
 python voicetype.py --press-to-talk ctrl --send-to-active paste
 ```
