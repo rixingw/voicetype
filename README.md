@@ -29,6 +29,12 @@ pip install -r requirements.txt
 
 The easiest way to use VoiceType is through the macOS menu bar app:
 
+**Option 1: Using the bash script (easiest):**
+```bash
+./run.sh
+```
+
+**Option 2: Direct Python command:**
 ```bash
 python run_app.py
 ```
