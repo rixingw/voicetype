@@ -6,11 +6,12 @@ VoiceType Menu Bar App - Simple Start/Stop
 import sys
 import threading
 import time
+import os
 from pathlib import Path
 from AppKit import (
     NSApplication, NSStatusBar, NSStatusItem, NSVariableStatusItemLength,
     NSMenu, NSMenuItem, NSApplicationActivationPolicyAccessory, NSApp,
-    NSEvent, NSKeyDownMask, NSKeyUpMask, NSFlagsChangedMask
+    NSEvent, NSKeyDownMask, NSKeyUpMask, NSFlagsChangedMask, NSAlert, NSInformationalAlertStyle
 )
 from Foundation import NSObject
 from PyObjCTools import AppHelper
@@ -18,6 +19,63 @@ import objc
 
 # Import VoiceType at module level so signal handlers are registered in main thread
 from voicetype import VoiceType
+
+# Lock file for single-instance enforcement
+APP_LOCK_FILE = Path.home() / ".voicetype_app.lock"
+_app_lock_file_handle = None
+
+
+def _acquire_app_lock():
+    """Acquire a lock file to prevent multiple instances from running."""
+    global _app_lock_file_handle
+    
+    if APP_LOCK_FILE.exists():
+        try:
+            with open(APP_LOCK_FILE, 'r') as f:
+                pid_str = f.read().strip()
+                try:
+                    old_pid = int(pid_str)
+                    # Check if process is still running
+                    os.kill(old_pid, 0)
+                    return False  # Another instance is running
+                except (ValueError, OSError):
+                    # Process doesn't exist, remove stale lock file
+                    try:
+                        APP_LOCK_FILE.unlink()
+                    except Exception:
+                        pass
+        except Exception:
+            try:
+                APP_LOCK_FILE.unlink()
+            except Exception:
+                pass
+    
+    try:
+        _app_lock_file_handle = open(APP_LOCK_FILE, 'w')
+        _app_lock_file_handle.write(str(os.getpid()))
+        _app_lock_file_handle.flush()
+        return True
+    except Exception as e:
+        print(f"⚠️  Failed to create lock file: {e}")
+        return False
+
+
+def _release_app_lock():
+    """Release the lock file."""
+    global _app_lock_file_handle
+    
+    if _app_lock_file_handle:
+        try:
+            _app_lock_file_handle.close()
+        except Exception:
+            pass
+        _app_lock_file_handle = None
+    
+    if APP_LOCK_FILE.exists():
+        try:
+            APP_LOCK_FILE.unlink()
+        except Exception:
+            pass
 
 
 class VoiceTypeApp(NSObject):
@@ -250,11 +308,34 @@ class VoiceTypeApp(NSObject):
         """Quit the app."""
         if self.is_running:
             self.stopVoicetype_(None)
+        _release_app_lock()
         NSApp.terminate_(None)
 
 
 def main():
     """Main entry point."""
+    # Check for existing instance
+    if not _acquire_app_lock():
+        print("⚠️  Another instance of VoiceType is already running.")
+        print(f"   If you're sure no other instance is running, delete: {APP_LOCK_FILE}")
+        
+        # Show alert
+        try:
+            app = NSApplication.sharedApplication()
+            app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
+            alert = NSAlert.alloc().init()
+            alert.setMessageText_("VoiceType Already Running")
+            alert.setInformativeText_(
+                "Another instance of VoiceType is already running.\n\n"
+                f"If you're sure no other instance is running, delete:\n{APP_LOCK_FILE}"
+            )
+            alert.setAlertStyle_(NSInformationalAlertStyle)
+            alert.addButtonWithTitle_("OK")
+            alert.runModal()
+        except:
+            pass
+        sys.exit(1)
+    
     try:
         app = NSApplication.sharedApplication()
         app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
@@ -268,10 +349,12 @@ def main():
             AppHelper.runEventLoop()
         else:
             print("Failed to initialize app delegate")
+            _release_app_lock()
     except Exception as e:
         print(f"Error in main: {e}")
         import traceback
         traceback.print_exc()
+        _release_app_lock()
         sys.exit(1)
 
 
