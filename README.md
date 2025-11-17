@@ -10,6 +10,10 @@
 - 🌐 **Multi-Language**: Supports multiple languages (auto-detected or specified)
 - 💾 **Optional Recording**: Save audio and transcriptions for later review
 
+## Requirements
+
+- Python >=3.10, <3.14
+
 ## Quick Start
 
 ### Installation

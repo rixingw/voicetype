@@ -4,11 +4,22 @@ VoiceType - Voice-to-Text Input Tool
 Press-to-talk voice transcription that types directly into your active application.
 """
 
+import sys
+
+# Check Python version
+if sys.version_info < (3, 10) or sys.version_info >= (3, 14):
+    print(f"❌ Error: VoiceType requires Python >=3.10, <3.14")
+    print(f"   Current version: {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    print(f"\n   Please install a compatible Python version:")
+    print(f"   - Python 3.10, 3.11, 3.12, or 3.13")
+    print(f"   - Using pyenv: pyenv install 3.13")
+    print(f"   - Using Homebrew: brew install python@3.13")
+    sys.exit(1)
+
 import whisper
 import sounddevice as sd
 import soundfile as sf
 import argparse
-import sys
 import numpy as np
 from pathlib import Path
 import tempfile
