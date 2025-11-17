@@ -54,6 +54,9 @@ class VoiceTypeApp(NSObject):
         self.build_menu()
         self.status_item.setMenu_(self.menu)
         
+        # Auto-start VoiceType on launch
+        AppHelper.callAfter(self.startVoicetype_, None)
+        
         return self
     
     def build_menu(self):
