@@ -24,14 +24,16 @@ PYTHON_VERSION=$(python -c "import sys; print(f'{sys.version_info.major}.{sys.ve
 PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
 PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
 
-if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]) || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 15 ]); then
-    echo "❌ Error: VoiceType requires Python >=3.10, <3.15"
+if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 10 ]) || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -ge 14 ]); then
+    echo "❌ Error: VoiceType requires Python >=3.10, <3.14"
     echo "   Current version: $PYTHON_VERSION"
     echo ""
+    echo "   Note: Python 3.14 is not yet supported due to numba dependency limitations."
+    echo ""
     echo "   Please install a compatible Python version:"
-    echo "   - Python 3.10, 3.11, 3.12, 3.13, or 3.14"
-    echo "   - Using pyenv: pyenv install 3.14"
-    echo "   - Using Homebrew: brew install python@3.14"
+    echo "   - Python 3.10, 3.11, 3.12, or 3.13"
+    echo "   - Using pyenv: pyenv install 3.13"
+    echo "   - Using Homebrew: brew install python@3.13"
     exit 1
 fi
 

@@ -12,7 +12,7 @@
 
 ## Requirements
 
-- Python >=3.10, <3.15
+- Python >=3.10, <3.14 (Python 3.14 not yet supported due to numba limitations)
 
 ## Quick Start
 

@@ -10,7 +10,7 @@ cd "$SCRIPT_DIR"
 # Required Python version
 REQUIRED_MIN_MAJOR=3
 REQUIRED_MIN_MINOR=10
-REQUIRED_MAX_MINOR=14
+REQUIRED_MAX_MINOR=13
 
 echo "🔍 Checking Python version..."
 
@@ -34,7 +34,7 @@ check_python_version() {
 
 # Try to find compatible Python version
 PYTHON_CMD=""
-for cmd in python3.14 python3.13 python3.12 python3.11 python3.10 python3 python; do
+for cmd in python3.13 python3.12 python3.11 python3.10 python3 python; do
     if check_python_version "$cmd"; then
         PYTHON_CMD="$cmd"
         PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")
@@ -45,16 +45,18 @@ done
 
 # If no compatible Python found, try to install it
 if [ -z "$PYTHON_CMD" ]; then
-    echo "❌ No compatible Python version found (>=3.10, <3.15)"
+    echo "❌ No compatible Python version found (>=3.10, <3.14)"
     echo ""
-    echo "🔧 Attempting to install Python 3.14..."
+    echo "   Note: Python 3.14 is not yet supported due to numba dependency limitations."
+    echo ""
+    echo "🔧 Attempting to install Python 3.13..."
     
     # Try pyenv first (only sets local version, not global)
     if command -v pyenv &> /dev/null; then
-        echo "   Using pyenv to install Python 3.14 (local to this directory only)..."
-        pyenv install 3.14.0 --skip-existing 2>/dev/null || pyenv install 3.14.0
-        pyenv local 3.14.0  # Sets .python-version file (local only, doesn't change global)
-        PYTHON_CMD="python3.14"
+        echo "   Using pyenv to install Python 3.13 (local to this directory only)..."
+        pyenv install 3.13.2 --skip-existing 2>/dev/null || pyenv install 3.13.2
+        pyenv local 3.13.2  # Sets .python-version file (local only, doesn't change global)
+        PYTHON_CMD="python3.13"
         if check_python_version "$PYTHON_CMD"; then
             PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")
             echo "✅ Installed Python $PYTHON_VERSION using pyenv (local to this directory)"
@@ -66,11 +68,11 @@ if [ -z "$PYTHON_CMD" ]; then
     
     # Try Homebrew if pyenv didn't work (installs system-wide but doesn't change default)
     if [ -z "$PYTHON_CMD" ] && command -v brew &> /dev/null; then
-        echo "   Using Homebrew to install Python 3.14..."
+        echo "   Using Homebrew to install Python 3.13..."
         echo "   Note: This installs Python system-wide but does NOT change your default Python"
-        brew install python@3.14 2>/dev/null || echo "   Note: Homebrew installation may require manual setup"
+        brew install python@3.13 2>/dev/null || echo "   Note: Homebrew installation may require manual setup"
         # Try to find the newly installed Python
-        for cmd in python3.14 /opt/homebrew/bin/python3.14 /usr/local/bin/python3.14; do
+        for cmd in python3.13 /opt/homebrew/bin/python3.13 /usr/local/bin/python3.13; do
             if check_python_version "$cmd"; then
                 PYTHON_CMD="$cmd"
                 PYTHON_VERSION=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')")
@@ -85,15 +87,15 @@ if [ -z "$PYTHON_CMD" ]; then
     if [ -z "$PYTHON_CMD" ]; then
         echo ""
         echo "❌ Could not automatically install Python."
-        echo "   Please install Python 3.10-3.14 manually:"
+        echo "   Please install Python 3.10-3.13 manually:"
         echo ""
         echo "   Option 1: Using pyenv"
         echo "     brew install pyenv"
-        echo "     pyenv install 3.14.0"
-        echo "     pyenv local 3.14.0"
+        echo "     pyenv install 3.13.2"
+        echo "     pyenv local 3.13.2"
         echo ""
         echo "   Option 2: Using Homebrew"
-        echo "     brew install python@3.14"
+        echo "     brew install python@3.13"
         echo ""
         echo "   Option 3: Download from python.org"
         echo "     https://www.python.org/downloads/"
