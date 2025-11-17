@@ -369,41 +369,42 @@ class VoiceType:
                         print(f"❌ AppleScript clipboard set failed: {e2}")
                         return
                 
-                # Try Cmd+V via pynput
+                # Try Cmd+V via AppleScript first (more reliable)
                 try:
-                    kb = Controller()
-                    time.sleep(0.1)
-                    with kb.pressed(Key.cmd):
-                        kb.press('v')
-                        kb.release('v')
-                    print("✅ Pasted into active app.")
+                    script = 'tell application "System Events" to keystroke "v" using command down'
+                    subprocess.run(["osascript", "-e", script], check=True, timeout=5)
+                    print("✅ Pasted into active app (AppleScript).")
                 except Exception as e:
-                    print(f"⚠️  Cmd+V paste failed: {e}. Trying AppleScript...")
+                    print(f"⚠️  AppleScript paste failed: {e}. Trying pynput...")
                     try:
-                        script = 'tell application "System Events" to keystroke "v" using command down'
-                        subprocess.run(["osascript", "-e", script], check=True)
-                        print("✅ Pasted into active app (AppleScript).")
+                        kb = Controller()
+                        time.sleep(0.1)
+                        with kb.pressed(Key.cmd):
+                            kb.press('v')
+                            kb.release('v')
+                        print("✅ Pasted into active app.")
                     except Exception as e2:
-                        print(f"❌ AppleScript paste failed: {e2}")
+                        print(f"❌ Cmd+V paste via pynput also failed: {e2}")
             
             elif self.send_to_active == 'type':
-                # Try simulated typing via pynput
+                # Use AppleScript first (more reliable in menu bar apps)
                 try:
-                    kb = Controller()
-                    delay = 1.0 / max(self.type_chars_per_sec, 1.0)
-                    for ch in text:
-                        kb.type(ch)
-                        time.sleep(delay)
-                    print("✅ Typed into active app.")
+                    # Escape special characters for AppleScript
+                    as_text = text.replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$")
+                    script = f'tell application "System Events" to keystroke "{as_text}"'
+                    subprocess.run(["osascript", "-e", script], check=True, timeout=30)
+                    print("✅ Typed into active app (AppleScript).")
                 except Exception as e:
-                    print(f"⚠️  Typing via pynput failed: {e}. Trying AppleScript...")
+                    print(f"⚠️  AppleScript typing failed: {e}. Trying pynput...")
                     try:
-                        as_text = text.replace("\\", "\\\\").replace("\"", "\\\"")
-                        script = f'tell application "System Events" to keystroke "{as_text}"'
-                        subprocess.run(["osascript", "-e", script], check=True)
-                        print("✅ Typed into active app (AppleScript).")
+                        kb = Controller()
+                        delay = 1.0 / max(self.type_chars_per_sec, 1.0)
+                        for ch in text:
+                            kb.type(ch)
+                            time.sleep(delay)
+                        print("✅ Typed into active app.")
                     except Exception as e2:
-                        print(f"❌ AppleScript typing failed: {e2}")
+                        print(f"❌ Typing via pynput also failed: {e2}")
         
         except Exception as e:
             print(f"❌ Failed to send to active app: {e}")
