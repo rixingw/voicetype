@@ -168,6 +168,29 @@ VoiceType requires the following macOS permissions:
 - Add language hint: `--language en`
 - Increase `--post-roll-seconds` to capture trailing words
 
+**Build errors when installing dependencies (e.g., "Failed to build 'numba'"):**
+- **macOS**: Install Xcode Command Line Tools:
+  ```bash
+  xcode-select --install
+  ```
+- **Linux**: Install build essentials:
+  ```bash
+  # Ubuntu/Debian
+  sudo apt-get install build-essential
+  
+  # Fedora
+  sudo dnf install gcc gcc-c++
+  ```
+- Try installing numba separately first:
+  ```bash
+  pip install numba
+  pip install -r requirements.txt
+  ```
+- Ensure you have the latest pip and setuptools:
+  ```bash
+  pip install --upgrade pip setuptools wheel
+  ```
+
 ## License
 
 This project is provided as-is for personal use.

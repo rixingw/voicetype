@@ -126,10 +126,57 @@ echo ""
 echo "⬆️  Upgrading pip..."
 python -m pip install --upgrade pip --quiet
 
+# Check for build tools (needed for numba)
+echo ""
+echo "🔧 Checking for build tools..."
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS - check for Xcode Command Line Tools
+    if ! xcode-select -p &> /dev/null; then
+        echo "⚠️  Xcode Command Line Tools not found."
+        echo "   Installing Xcode Command Line Tools (this may take a while)..."
+        xcode-select --install 2>/dev/null || echo "   Please install manually: xcode-select --install"
+        echo "   After installation completes, run this script again."
+        exit 1
+    else
+        echo "✅ Xcode Command Line Tools found"
+    fi
+fi
+
+# Install build dependencies first
+echo ""
+echo "📦 Installing build dependencies..."
+python -m pip install --upgrade wheel setuptools --quiet
+
 # Install dependencies
 echo ""
 echo "📥 Installing dependencies..."
-pip install -r requirements.txt
+# Try to install with pre-built wheels first, fall back to building if needed
+pip install -r requirements.txt || {
+    echo ""
+    echo "⚠️  Installation failed. Trying with build isolation disabled..."
+    pip install --no-build-isolation -r requirements.txt || {
+        echo ""
+        echo "❌ Installation failed. Common solutions:"
+        echo ""
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            echo "   1. Ensure Xcode Command Line Tools are installed:"
+            echo "      xcode-select --install"
+            echo ""
+            echo "   2. Try installing numba separately first:"
+            echo "      pip install numba"
+            echo "      pip install -r requirements.txt"
+        else
+            echo "   1. Install build essentials:"
+            echo "      - Ubuntu/Debian: sudo apt-get install build-essential"
+            echo "      - Fedora: sudo dnf install gcc gcc-c++"
+            echo ""
+            echo "   2. Try installing numba separately first:"
+            echo "      pip install numba"
+            echo "      pip install -r requirements.txt"
+        fi
+        exit 1
+    }
+}
 
 echo ""
 echo "✅ Setup complete!"
